@@ -28,6 +28,7 @@ cat <<EOF
 class Pominspect < Formula
   desc "Terminal UI for exploring a Maven build's effective POM and dependency tree"
   homepage "https://github.com/${repo}"
+  license "MIT"
   version "${version}"
 
   on_macos do

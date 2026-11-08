@@ -63,7 +63,7 @@ jobs:
         run: |
           name="pominspect-${GITHUB_REF_NAME}-${{ matrix.target }}"
           mkdir -p "dist/$name"
-          cp README.md "dist/$name/"
+          cp README.md LICENSE "dist/$name/"
           cd dist
           if [[ "${{ matrix.target }}" == *windows* ]]; then
             cp "../target/${{ matrix.target }}/release/pominspect.exe" "$name/"

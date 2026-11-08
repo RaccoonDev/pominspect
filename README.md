@@ -137,3 +137,7 @@ git tag v0.0.1 && git push origin v0.0.1
 [.github/workflows/release.yml](.github/workflows/release.yml) then runs CI, builds the archives for every platform, publishes them as a GitHub release with generated notes, and updates the formula in [RaccoonDev/homebrew-tap](https://github.com/RaccoonDev/homebrew-tap) (using the `HOMEBREW_TAP_TOKEN` secret). It fails if the tag doesn't match the version in `Cargo.toml`.
 
 [GLOSSARY.md](GLOSSARY.md) defines the project's terms (Effective POM, Origin, Inspection Error, …), and [docs/adr/](docs/adr/) records the main design decisions.
+
+## License
+
+[MIT](LICENSE)
