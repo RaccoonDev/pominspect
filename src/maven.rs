@@ -30,13 +30,29 @@ pub struct Request {
 
 impl Request {
     /// Accepts a directory containing `pom.xml` or a path to a POM file.
-    pub fn new(path: &Path, mvn: Option<PathBuf>, profiles: Vec<String>, defines: Vec<String>) -> Result<Self> {
-        let pom = if path.is_dir() { path.join("pom.xml") } else { path.to_path_buf() };
+    pub fn new(
+        path: &Path,
+        mvn: Option<PathBuf>,
+        profiles: Vec<String>,
+        defines: Vec<String>,
+    ) -> Result<Self> {
+        let pom = if path.is_dir() {
+            path.join("pom.xml")
+        } else {
+            path.to_path_buf()
+        };
         if !pom.is_file() {
             bail!("no pom.xml found at {}", pom.display());
         }
-        let pom = pom.canonicalize().with_context(|| format!("cannot resolve {}", pom.display()))?;
-        Ok(Self { pom, mvn, profiles, defines })
+        let pom = pom
+            .canonicalize()
+            .with_context(|| format!("cannot resolve {}", pom.display()))?;
+        Ok(Self {
+            pom,
+            mvn,
+            profiles,
+            defines,
+        })
     }
 
     pub fn dir(&self) -> &Path {
@@ -52,7 +68,7 @@ impl Request {
             .ancestors()
             .map(|d| d.join(if cfg!(windows) { "mvnw.cmd" } else { "mvnw" }))
             .find(|p| p.is_file())
-            .unwrap_or_else(|| PathBuf::from("mvn"))
+            .unwrap_or_else(|| PathBuf::from(if cfg!(windows) { "mvn.cmd" } else { "mvn" }))
     }
 
     fn args(&self, out: &Path) -> Vec<String> {
@@ -91,8 +107,14 @@ impl Request {
 /// stale messages from an earlier run can be ignored.
 #[derive(Debug)]
 pub enum Event {
-    Log { run: u64, line: String },
-    Done { run: u64, result: Result<Vec<Module>, String> },
+    Log {
+        run: u64,
+        line: String,
+    },
+    Done {
+        run: u64,
+        result: Result<Vec<Module>, String>,
+    },
 }
 
 /// Starts an inspection in the background and returns its run id.
@@ -147,11 +169,18 @@ fn run_and_parse(req: &Request, run: u64, tx: &Sender<Event>, out: &Path) -> Res
     assemble(&eff, &trees, &log)
 }
 
-fn forward(stream: impl Read + Send + 'static, run: u64, tx: Sender<Event>) -> thread::JoinHandle<Vec<String>> {
+fn forward(
+    stream: impl Read + Send + 'static,
+    run: u64,
+    tx: Sender<Event>,
+) -> thread::JoinHandle<Vec<String>> {
     thread::spawn(move || {
         let mut lines = Vec::new();
         for line in BufReader::new(stream).lines().map_while(Result::ok) {
-            let _ = tx.send(Event::Log { run, line: line.clone() });
+            let _ = tx.send(Event::Log {
+                run,
+                line: line.clone(),
+            });
             lines.push(line);
         }
         lines
@@ -228,9 +257,14 @@ mod tests {
 
     #[test]
     fn module_without_tree_gets_inspection_error() {
-        let without_web: String = DEPS.split("com.example:web:jar").next().unwrap().to_string();
+        let without_web: String = DEPS
+            .split("com.example:web:jar")
+            .next()
+            .unwrap()
+            .to_string();
         let log = vec![
-            "[ERROR] Failed to execute goal x on project web: Could not resolve dependencies".to_string(),
+            "[ERROR] Failed to execute goal x on project web: Could not resolve dependencies"
+                .to_string(),
             "[ERROR] Failed to execute goal x on project other: nope".to_string(),
         ];
         let modules = assemble(EFF, &without_web, &log).unwrap();
@@ -243,7 +277,8 @@ mod tests {
     #[test]
     fn reads_reactor_progress() {
         assert_eq!(
-            progress("[INFO] Building web 1.0.0                                     [3/3]").as_deref(),
+            progress("[INFO] Building web 1.0.0                                     [3/3]")
+                .as_deref(),
             Some("web 1.0.0 [3/3]")
         );
         assert_eq!(progress("[INFO] Downloading from central"), None);

@@ -21,12 +21,14 @@ fn warn() -> Style {
 }
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
-    let [main, status] = Layout::vertical([Constraint::Min(3), Constraint::Length(1)]).areas(frame.area());
+    let [main, status] =
+        Layout::vertical([Constraint::Min(3), Constraint::Length(1)]).areas(frame.area());
 
     if app.modules.is_empty() {
         draw_log(frame, app, main);
     } else if app.show_log {
-        let [top, log] = Layout::vertical([Constraint::Percentage(60), Constraint::Percentage(40)]).areas(main);
+        let [top, log] =
+            Layout::vertical([Constraint::Percentage(60), Constraint::Percentage(40)]).areas(main);
         draw_browser(frame, app, top);
         draw_log(frame, app, log);
     } else {
@@ -42,17 +44,27 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 }
 
 fn draw_browser(frame: &mut Frame, app: &mut App, area: Rect) {
-    let [left, right] = Layout::horizontal([Constraint::Percentage(45), Constraint::Percentage(55)]).areas(area);
+    let [left, right] =
+        Layout::horizontal([Constraint::Percentage(45), Constraint::Percentage(55)]).areas(area);
     let rows = app.rows();
-    let items: Vec<ListItem> = rows.iter().map(|r| ListItem::new(row_line(app, r))).collect();
+    let items: Vec<ListItem> = rows
+        .iter()
+        .map(|r| ListItem::new(row_line(app, r)))
+        .collect();
     let list = List::new(items)
         .block(Block::bordered().title(" Modules "))
-        .highlight_style(Style::new().bg(Color::Rgb(50, 60, 80)).add_modifier(Modifier::BOLD));
+        .highlight_style(
+            Style::new()
+                .bg(Color::Rgb(50, 60, 80))
+                .add_modifier(Modifier::BOLD),
+        );
     frame.render_stateful_widget(list, left, &mut app.list_state);
 
     let detail = detail_text(app);
     frame.render_widget(
-        Paragraph::new(detail).wrap(Wrap { trim: false }).block(Block::bordered().title(" Detail ")),
+        Paragraph::new(detail)
+            .wrap(Wrap { trim: false })
+            .block(Block::bordered().title(" Detail ")),
         right,
     );
 }
@@ -83,9 +95,16 @@ fn row_line(app: &App, row: &Row) -> Line<'static> {
         Some(Entry::Dep { module, node, .. }) => {
             let omitted = node.omitted.is_some();
             let name = Span::raw(format!("{} {}", node.artifact, node.version));
-            spans.push(if omitted { name.style(dim().add_modifier(Modifier::CROSSED_OUT)) } else { name });
+            spans.push(if omitted {
+                name.style(dim().add_modifier(Modifier::CROSSED_OUT))
+            } else {
+                name
+            });
             if node.scope != "compile" {
-                spans.push(Span::styled(format!(" [{}]", node.scope), Style::new().fg(Color::Magenta)));
+                spans.push(Span::styled(
+                    format!(" [{}]", node.scope),
+                    Style::new().fg(Color::Magenta),
+                ));
             }
             match &node.omitted {
                 Some(Omission::Conflict { winner }) => {
@@ -123,8 +142,14 @@ fn module_detail(m: &Module) -> Text<'static> {
         lines.extend(e.lines().map(|l| Line::raw(l.to_string())));
         lines.push(Line::raw(""));
     }
-    lines.push(Line::from(format!("direct dependencies:   {}", m.tree.len())));
-    lines.push(Line::from(format!("managed dependencies:  {}", m.managed.len())));
+    lines.push(Line::from(format!(
+        "direct dependencies:   {}",
+        m.tree.len()
+    )));
+    lines.push(Line::from(format!(
+        "managed dependencies:  {}",
+        m.managed.len()
+    )));
     conflicts_section(m, &mut lines);
     Text::from(lines)
 }
@@ -159,13 +184,23 @@ fn conflicts_section(m: &Module, lines: &mut Vec<Line<'static>>) {
     lines.push(heading(&format!("Version conflicts ({})", conflicts.len())));
     for key in conflicts {
         let occ = m.occurrences(&key);
-        let winner = occ.iter().find(|(_, n)| n.omitted.is_none()).map(|(_, n)| n.version.clone());
-        let losers: Vec<String> =
-            occ.iter().filter(|(_, n)| n.is_conflict_loser()).map(|(_, n)| n.version.clone()).collect();
+        let winner = occ
+            .iter()
+            .find(|(_, n)| n.omitted.is_none())
+            .map(|(_, n)| n.version.clone());
+        let losers: Vec<String> = occ
+            .iter()
+            .filter(|(_, n)| n.is_conflict_loser())
+            .map(|(_, n)| n.version.clone())
+            .collect();
         lines.push(Line::from(vec![
             Span::styled("⚠ ", warn()),
             Span::raw(key.to_string()),
-            Span::raw(format!("  {} wins over {}", winner.unwrap_or("?".into()), losers.join(", "))),
+            Span::raw(format!(
+                "  {} wins over {}",
+                winner.unwrap_or("?".into()),
+                losers.join(", ")
+            )),
         ]));
     }
 }
@@ -181,7 +216,10 @@ fn path_line(module: &Module, path: &[usize]) -> Line<'static> {
 
 fn dep_detail(module: &Module, path: &[usize], node: &DepNode) -> Text<'static> {
     let mut lines = vec![Line::from(node.label()).bold()];
-    let mut facts = vec![format!("type: {}", node.kind), format!("scope: {}", node.scope)];
+    let mut facts = vec![
+        format!("type: {}", node.kind),
+        format!("scope: {}", node.scope),
+    ];
     facts.extend(node.notes.iter().cloned());
     lines.push(Line::from(facts.join("   ")));
     if let Some(o) = &node.omitted {
@@ -199,15 +237,22 @@ fn dep_detail(module: &Module, path: &[usize], node: &DepNode) -> Text<'static> 
         lines.push(Line::raw(format!("  {present}")));
         let version = match origin.version {
             VersionOrigin::Declared { at: Some(at) } => vec![format!("version    ← {at}")],
-            VersionOrigin::Declared { at: None } => vec!["version    ← (location not reported by Maven)".into()],
+            VersionOrigin::Declared { at: None } => {
+                vec!["version    ← (location not reported by Maven)".into()]
+            }
             VersionOrigin::Managed { from, at } => vec![
                 format!(
                     "version    ← dependencyManagement{}",
                     at.map(|a| format!(", {a}")).unwrap_or_default()
                 ),
-                format!("             (requested {from}, managed to {})", node.version),
+                format!(
+                    "             (requested {from}, managed to {})",
+                    node.version
+                ),
             ],
-            VersionOrigin::FromParent { via } => vec![format!("version    ← as requested by {via}")],
+            VersionOrigin::FromParent { via } => {
+                vec![format!("version    ← as requested by {via}")]
+            }
         };
         lines.extend(version.into_iter().map(|v| Line::raw(format!("  {v}"))));
     }
@@ -216,23 +261,37 @@ fn dep_detail(module: &Module, path: &[usize], node: &DepNode) -> Text<'static> 
     lines.push(heading("Path"));
     lines.push(path_line(module, path));
 
-    let others: Vec<_> = module.occurrences(&node.key()).into_iter().filter(|(p, _)| p != path).collect();
+    let others: Vec<_> = module
+        .occurrences(&node.key())
+        .into_iter()
+        .filter(|(p, _)| p != path)
+        .collect();
     if !others.is_empty() {
         lines.push(Line::raw(""));
-        lines.push(heading(&format!("Other occurrences in {} ({})", module.coords.artifact, others.len())));
+        lines.push(heading(&format!(
+            "Other occurrences in {} ({})",
+            module.coords.artifact,
+            others.len()
+        )));
         for (p, n) in others {
             lines.push(occurrence_line(n));
             lines.push(path_line(module, &p));
         }
     }
     lines.push(Line::raw(""));
-    lines.push(Line::styled("w: why is this here, across all modules", dim()));
+    lines.push(Line::styled(
+        "w: why is this here, across all modules",
+        dim(),
+    ));
     Text::from(lines)
 }
 
 fn occurrence_line(n: &DepNode) -> Line<'static> {
     match &n.omitted {
-        None => Line::from(vec![Span::styled("✓ ", Style::new().fg(Color::Green)), Span::raw(n.version.clone())]),
+        None => Line::from(vec![
+            Span::styled("✓ ", Style::new().fg(Color::Green)),
+            Span::raw(n.version.clone()),
+        ]),
         Some(o) => Line::from(vec![
             Span::styled("✗ ", warn()),
             Span::raw(n.version.clone()),
@@ -258,9 +317,11 @@ fn draw_why(frame: &mut Frame, app: &App, key: &Key) {
     let area = popup(frame.area(), 80, 80);
     frame.render_widget(Clear, area);
     frame.render_widget(
-        Paragraph::new(lines)
-            .wrap(Wrap { trim: false })
-            .block(Block::bordered().title(format!(" Why {key}? ")).title_bottom(" Esc close ")),
+        Paragraph::new(lines).wrap(Wrap { trim: false }).block(
+            Block::bordered()
+                .title(format!(" Why {key}? "))
+                .title_bottom(" Esc close "),
+        ),
         area,
     );
 }
@@ -275,18 +336,29 @@ fn draw_help(frame: &mut Frame) {
         ("PgUp PgDn g G", "page, top, bottom"),
         ("/", "search (group:artifact:version)"),
         ("n / N", "next / previous match"),
-        ("w", "why: every path to the selected dependency, in all modules"),
+        (
+            "w",
+            "why: every path to the selected dependency, in all modules",
+        ),
         ("m", "toggle the Maven log"),
         ("r", "re-run Maven"),
         ("q", "quit"),
     ];
     let lines: Vec<Line> = keys
         .iter()
-        .map(|(k, d)| Line::from(vec![Span::styled(format!("{k:>15}  "), warn()), Span::raw(*d)]))
+        .map(|(k, d)| {
+            Line::from(vec![
+                Span::styled(format!("{k:>15}  "), warn()),
+                Span::raw(*d),
+            ])
+        })
         .collect();
     let area = popup(frame.area(), 60, 60);
     frame.render_widget(Clear, area);
-    frame.render_widget(Paragraph::new(lines).block(Block::bordered().title(" Keys ")), area);
+    frame.render_widget(
+        Paragraph::new(lines).block(Block::bordered().title(" Keys ")),
+        area,
+    );
 }
 
 fn draw_log(frame: &mut Frame, app: &App, area: Rect) {
@@ -305,25 +377,40 @@ fn draw_log(frame: &mut Frame, app: &App, area: Rect) {
             Line::styled(l.clone(), style)
         })
         .collect();
-    frame.render_widget(Paragraph::new(lines).block(Block::bordered().title(" Maven log (m) ")), area);
+    frame.render_widget(
+        Paragraph::new(lines).block(Block::bordered().title(" Maven log (m) ")),
+        area,
+    );
 }
 
 fn draw_status(frame: &mut Frame, app: &App, area: Rect) {
     let left = match (&app.mode, &app.message) {
-        (Mode::Search(buf), _) => Line::from(vec![Span::styled("/", warn()), Span::raw(format!("{buf}▏"))]),
+        (Mode::Search(buf), _) => Line::from(vec![
+            Span::styled("/", warn()),
+            Span::raw(format!("{buf}▏")),
+        ]),
         (_, Some(msg)) => Line::styled(msg.clone(), warn()),
-        _ => Line::styled(" / search   w why   m maven log   r reload   ? help   q quit", dim()),
+        _ => Line::styled(
+            " / search   w why   m maven log   r reload   ? help   q quit",
+            dim(),
+        ),
     };
     let right = match &app.status {
         Status::Running { progress } => Line::styled(
             format!(
                 "{} running mvn…{} ",
                 SPINNER[app.tick % SPINNER.len()],
-                progress.as_ref().map(|p| format!(" ({p})")).unwrap_or_default()
+                progress
+                    .as_ref()
+                    .map(|p| format!(" ({p})"))
+                    .unwrap_or_default()
             ),
             Style::new().fg(Color::Cyan),
         ),
-        Status::Ready => Line::styled(format!("✓ {} modules ", app.modules.len()), Style::new().fg(Color::Green)),
+        Status::Ready => Line::styled(
+            format!("✓ {} modules ", app.modules.len()),
+            Style::new().fg(Color::Green),
+        ),
         Status::Failed => Line::styled("✗ Maven failed, see log ", Style::new().fg(Color::Red)),
     };
     let width = right.width() as u16;
@@ -361,21 +448,37 @@ mod tests {
         terminal.draw(|f| draw(f, app)).unwrap();
         let buf = terminal.backend().buffer().clone();
         (0..buf.area.height)
-            .map(|y| (0..buf.area.width).map(|x| buf[(x, y)].symbol()).collect::<String>().trim_end().to_string())
+            .map(|y| {
+                (0..buf.area.width)
+                    .map(|x| buf[(x, y)].symbol())
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string()
+            })
             .collect::<Vec<_>>()
             .join("\n")
     }
 
     fn press(app: &mut App, keys: &str) {
         for c in keys.chars() {
-            let code = if c == '\n' { KeyCode::Enter } else { KeyCode::Char(c) };
+            let code = if c == '\n' {
+                KeyCode::Enter
+            } else {
+                KeyCode::Char(c)
+            };
             app.on_key(KeyEvent::new(code, KeyModifiers::NONE));
         }
     }
 
     fn loaded_app() -> App {
         let (tx, _rx) = std::sync::mpsc::channel();
-        let req = Request::new(std::path::Path::new("tests/fixtures/multi"), None, vec![], vec![]).unwrap();
+        let req = Request::new(
+            std::path::Path::new("tests/fixtures/multi"),
+            None,
+            vec![],
+            vec![],
+        )
+        .unwrap();
         let mut app = App::new(req, tx);
         let modules = maven::assemble(
             include_str!("../tests/fixtures/maven-output/effective-pom.xml"),
@@ -383,7 +486,10 @@ mod tests {
             &[],
         )
         .unwrap();
-        app.on_maven(maven::Event::Done { run: 0, result: Ok(modules) });
+        app.on_maven(maven::Event::Done {
+            run: 0,
+            result: Ok(modules),
+        });
         app
     }
 

@@ -16,7 +16,11 @@ pub const FACET_DEPENDENCIES: usize = 0;
 pub enum Entry<'a> {
     Module(&'a Module),
     Dependencies(&'a Module),
-    Dep { module: &'a Module, path: &'a [usize], node: &'a DepNode },
+    Dep {
+        module: &'a Module,
+        path: &'a [usize],
+        node: &'a DepNode,
+    },
 }
 
 pub struct Row {
@@ -110,7 +114,8 @@ impl App {
                 }
                 Err(e) => {
                     self.log.push(String::new());
-                    self.log.extend(e.lines().map(|l| format!("[pominspect] {l}")));
+                    self.log
+                        .extend(e.lines().map(|l| format!("[pominspect] {l}")));
                     self.status = Status::Failed;
                     self.show_log = true;
                 }
@@ -126,7 +131,11 @@ impl App {
             2 => Some(Entry::Dependencies(module)),
             _ => {
                 let path = &id[2..];
-                Some(Entry::Dep { module, path, node: module.node(path)? })
+                Some(Entry::Dep {
+                    module,
+                    path,
+                    node: module.node(path)?,
+                })
             }
         }
     }
@@ -152,7 +161,12 @@ impl App {
     fn push_rows(&self, id: NodeId, depth: usize, rows: &mut Vec<Row>) {
         let n = self.children_count(&id);
         let expanded = n > 0 && self.expanded.contains(&id);
-        rows.push(Row { id: id.clone(), depth, expandable: n > 0, expanded });
+        rows.push(Row {
+            id: id.clone(),
+            depth,
+            expandable: n > 0,
+            expanded,
+        });
         if expanded {
             for i in 0..n {
                 let mut child = id.clone();
@@ -264,7 +278,13 @@ impl App {
         let start = ids.iter().position(|i| *i == self.selected).unwrap_or(0);
         let n = ids.len();
         let found = (1..=n)
-            .map(|k| if forward { (start + k) % n } else { (start + n - k) % n })
+            .map(|k| {
+                if forward {
+                    (start + k) % n
+                } else {
+                    (start + n - k) % n
+                }
+            })
             .find(|&i| self.search_text(&ids[i]).to_lowercase().contains(&needle));
         match found {
             Some(i) => {
@@ -304,7 +324,10 @@ impl App {
                 _ => {}
             },
             Mode::Why(_) | Mode::Help => {
-                if matches!(key.code, KeyCode::Esc | KeyCode::Char('q' | 'w' | '?') | KeyCode::Enter) {
+                if matches!(
+                    key.code,
+                    KeyCode::Esc | KeyCode::Char('q' | 'w' | '?') | KeyCode::Enter
+                ) {
                     self.mode = Mode::Normal;
                 }
             }
@@ -335,10 +358,10 @@ impl App {
             }
             KeyCode::Left | KeyCode::Char('h') => {
                 let id = self.selected.clone();
-                if !self.expanded.remove(&id) {
-                    if let Some(p) = Self::parent(&id) {
-                        self.selected = p;
-                    }
+                if !self.expanded.remove(&id)
+                    && let Some(p) = Self::parent(&id)
+                {
+                    self.selected = p;
                 }
                 self.fix_selection();
             }

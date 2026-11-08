@@ -34,9 +34,12 @@ pub fn parse(xml: &str) -> Result<Vec<EffectiveProject>> {
     let mut last_leaf: Option<String> = None;
 
     loop {
-        let event = reader
-            .read_event()
-            .with_context(|| format!("effective POM is not valid XML near byte {}", reader.buffer_position()))?;
+        let event = reader.read_event().with_context(|| {
+            format!(
+                "effective POM is not valid XML near byte {}",
+                reader.buffer_position()
+            )
+        })?;
         match event {
             Event::Start(e) => {
                 let name = e.local_name().as_ref().to_string();
@@ -102,13 +105,13 @@ pub fn parse(xml: &str) -> Result<Vec<EffectiveProject>> {
                 }
             }
             Event::Comment(e) => {
-                if let (Some(field), Some((_, d))) = (last_leaf.take(), dep.as_mut()) {
-                    if let Some(loc) = parse_location(&e.into_inner()) {
-                        match field.as_str() {
-                            "artifactId" => d.declared_at = Some(loc),
-                            "version" => d.version_at = Some(loc),
-                            _ => {}
-                        }
+                if let (Some(field), Some((_, d))) = (last_leaf.take(), dep.as_mut())
+                    && let Some(loc) = parse_location(&e.into_inner())
+                {
+                    match field.as_str() {
+                        "artifactId" => d.declared_at = Some(loc),
+                        "version" => d.version_at = Some(loc),
+                        _ => {}
                     }
                 }
             }
@@ -133,7 +136,10 @@ fn section_of(path: &[String]) -> Option<Section> {
 /// Parses ` com.example:web:1.0.0, line 22 ` into a [`Location`].
 fn parse_location(comment: &str) -> Option<Location> {
     let (pom, line) = comment.trim().rsplit_once(", line ")?;
-    Some(Location { pom: pom.trim().to_string(), line: line.trim().parse().ok()? })
+    Some(Location {
+        pom: pom.trim().to_string(),
+        line: line.trim().parse().ok()?,
+    })
 }
 
 #[cfg(test)]
@@ -143,14 +149,24 @@ mod tests {
     const FIXTURE: &str = include_str!("../../tests/fixtures/maven-output/effective-pom.xml");
 
     fn loc(pom: &str, line: u32) -> Option<Location> {
-        Some(Location { pom: pom.into(), line })
+        Some(Location {
+            pom: pom.into(),
+            line,
+        })
     }
 
     #[test]
     fn reads_every_project() {
         let projects = parse(FIXTURE).unwrap();
         let coords: Vec<_> = projects.iter().map(|p| p.coords.to_string()).collect();
-        assert_eq!(coords, ["com.example:multi:1.0.0", "com.example:core:1.0.0", "com.example:web:1.0.0"]);
+        assert_eq!(
+            coords,
+            [
+                "com.example:multi:1.0.0",
+                "com.example:core:1.0.0",
+                "com.example:web:1.0.0"
+            ]
+        );
         assert_eq!(projects[0].coords.packaging, "pom");
         assert_eq!(projects[1].coords.packaging, "jar");
     }
@@ -158,18 +174,32 @@ mod tests {
     #[test]
     fn version_origin_points_at_the_bom() {
         let core = &parse(FIXTURE).unwrap()[1];
-        let databind = core.declared.iter().find(|d| d.artifact == "jackson-databind").unwrap();
+        let databind = core
+            .declared
+            .iter()
+            .find(|d| d.artifact == "jackson-databind")
+            .unwrap();
         assert_eq!(databind.version.as_deref(), Some("2.17.1"));
         assert_eq!(databind.declared_at, loc("com.example:core:1.0.0", 13));
-        assert_eq!(databind.version_at, loc("com.fasterxml.jackson:jackson-bom:2.17.1", 96));
+        assert_eq!(
+            databind.version_at,
+            loc("com.fasterxml.jackson:jackson-bom:2.17.1", 96)
+        );
     }
 
     #[test]
     fn reads_dependency_management_but_not_profile_dependencies() {
         let projects = parse(FIXTURE).unwrap();
         let root = &projects[0];
-        assert!(root.declared.is_empty(), "profile dependencies must not count as declared");
-        let slf4j = root.managed.iter().find(|d| d.artifact == "slf4j-api").unwrap();
+        assert!(
+            root.declared.is_empty(),
+            "profile dependencies must not count as declared"
+        );
+        let slf4j = root
+            .managed
+            .iter()
+            .find(|d| d.artifact == "slf4j-api")
+            .unwrap();
         assert_eq!(slf4j.version_at, loc("com.example:multi:1.0.0", 27));
         assert_eq!(projects[2].declared.len(), 5);
     }

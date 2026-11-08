@@ -65,7 +65,10 @@ pub struct DeclaredDependency {
 
 impl DeclaredDependency {
     pub fn key(&self) -> Key {
-        Key { group: self.group.clone(), artifact: self.artifact.clone() }
+        Key {
+            group: self.group.clone(),
+            artifact: self.artifact.clone(),
+        }
     }
 }
 
@@ -108,7 +111,10 @@ pub struct DepNode {
 
 impl DepNode {
     pub fn key(&self) -> Key {
-        Key { group: self.group.clone(), artifact: self.artifact.clone() }
+        Key {
+            group: self.group.clone(),
+            artifact: self.artifact.clone(),
+        }
     }
 
     pub fn is_conflict_loser(&self) -> bool {
@@ -151,7 +157,9 @@ impl Module {
 
     /// The nodes along an index path, from the tree root to the target.
     pub fn chain(&self, path: &[usize]) -> Vec<&DepNode> {
-        (1..=path.len()).filter_map(|n| self.node(&path[..n])).collect()
+        (1..=path.len())
+            .filter_map(|n| self.node(&path[..n]))
+            .collect()
     }
 
     /// Every node in the tree with the given key, with its index path.
@@ -179,7 +187,9 @@ impl Module {
 
     /// True if some occurrence of `key` lost a version conflict.
     pub fn has_conflict(&self, key: &Key) -> bool {
-        self.occurrences(key).iter().any(|(_, n)| n.is_conflict_loser())
+        self.occurrences(key)
+            .iter()
+            .any(|(_, n)| n.is_conflict_loser())
     }
 
     /// Every key that has at least one conflict-losing occurrence.
@@ -205,7 +215,9 @@ impl Module {
         if chain.len() == 1 {
             let declared = self.declared.iter().find(|d| d.key() == key);
             return Some(Origin {
-                presence: Presence::Direct { at: declared.and_then(|d| d.declared_at.clone()) },
+                presence: Presence::Direct {
+                    at: declared.and_then(|d| d.declared_at.clone()),
+                },
                 version: match (&node.managed_from, self.managed_entry(&key)) {
                     (Some(from), Some(m)) => VersionOrigin::Managed {
                         from: from.clone(),
@@ -219,13 +231,17 @@ impl Module {
         }
         let parent = chain[chain.len() - 2];
         Some(Origin {
-            presence: Presence::Transitive { via: parent.label() },
+            presence: Presence::Transitive {
+                via: parent.label(),
+            },
             version: match &node.managed_from {
                 Some(from) => VersionOrigin::Managed {
                     from: from.clone(),
                     at: self.managed_entry(&key).and_then(|m| m.version_at.clone()),
                 },
-                None => VersionOrigin::FromParent { via: parent.label() },
+                None => VersionOrigin::FromParent {
+                    via: parent.label(),
+                },
             },
         })
     }
@@ -273,7 +289,10 @@ mod tests {
     }
 
     fn loc(pom: &str, line: u32) -> Option<Location> {
-        Some(Location { pom: pom.into(), line })
+        Some(Location {
+            pom: pom.into(),
+            line,
+        })
     }
 
     #[test]
@@ -283,8 +302,12 @@ mod tests {
         assert_eq!(
             m.origin(&[2]).unwrap(),
             Origin {
-                presence: Presence::Direct { at: loc("com.example:web:1.0.0", 23) },
-                version: VersionOrigin::Declared { at: loc("com.example:web:1.0.0", 24) },
+                presence: Presence::Direct {
+                    at: loc("com.example:web:1.0.0", 23)
+                },
+                version: VersionOrigin::Declared {
+                    at: loc("com.example:web:1.0.0", 24)
+                },
             }
         );
     }
@@ -294,10 +317,18 @@ mod tests {
         let m = web();
         // web → logback-classic → slf4j-api (managed from 2.0.7)
         let o = m.origin(&[1, 1]).unwrap();
-        assert_eq!(o.presence, Presence::Transitive { via: "ch.qos.logback:logback-classic:1.4.14".into() });
+        assert_eq!(
+            o.presence,
+            Presence::Transitive {
+                via: "ch.qos.logback:logback-classic:1.4.14".into()
+            }
+        );
         assert_eq!(
             o.version,
-            VersionOrigin::Managed { from: "2.0.7".into(), at: loc("com.example:multi:1.0.0", 27) }
+            VersionOrigin::Managed {
+                from: "2.0.7".into(),
+                at: loc("com.example:multi:1.0.0", 27)
+            }
         );
     }
 
@@ -305,13 +336,21 @@ mod tests {
     fn unmanaged_transitive_version_comes_from_parent() {
         let m = web();
         let o = m.origin(&[1, 0]).unwrap();
-        assert_eq!(o.version, VersionOrigin::FromParent { via: "ch.qos.logback:logback-classic:1.4.14".into() });
+        assert_eq!(
+            o.version,
+            VersionOrigin::FromParent {
+                via: "ch.qos.logback:logback-classic:1.4.14".into()
+            }
+        );
     }
 
     #[test]
     fn finds_conflicts_and_occurrences() {
         let m = web();
-        let lang = Key { group: "org.apache.commons".into(), artifact: "commons-lang3".into() };
+        let lang = Key {
+            group: "org.apache.commons".into(),
+            artifact: "commons-lang3".into(),
+        };
         assert_eq!(m.conflicts(), vec![lang.clone()]);
         let paths: Vec<_> = m.occurrences(&lang).into_iter().map(|(p, _)| p).collect();
         assert_eq!(paths, vec![vec![2], vec![3, 0]]);

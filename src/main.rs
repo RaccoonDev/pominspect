@@ -27,7 +27,12 @@ struct Cli {
     path: Option<PathBuf>,
 
     /// Profiles to activate, as with `mvn -P` (comma-separated, repeatable)
-    #[arg(short = 'P', long = "activate-profiles", value_delimiter = ',', value_name = "PROFILE")]
+    #[arg(
+        short = 'P',
+        long = "activate-profiles",
+        value_delimiter = ',',
+        value_name = "PROFILE"
+    )]
     profiles: Vec<String>,
 
     /// Define a property, as with `mvn -D` (repeatable)
@@ -55,12 +60,11 @@ fn main() -> Result<()> {
             while let Ok(ev) = rx.try_recv() {
                 app.on_maven(ev);
             }
-            if event::poll(Duration::from_millis(100))? {
-                if let Event::Key(key) = event::read()? {
-                    if key.kind == KeyEventKind::Press {
-                        app.on_key(key);
-                    }
-                }
+            if event::poll(Duration::from_millis(100))?
+                && let Event::Key(key) = event::read()?
+                && key.kind == KeyEventKind::Press
+            {
+                app.on_key(key);
             }
             app.tick = app.tick.wrapping_add(1);
         }

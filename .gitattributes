@@ -1,0 +1,2 @@
+# Captured Maven output is parsed byte-for-byte in tests; keep LF on every OS.
+tests/fixtures/** text eol=lf
