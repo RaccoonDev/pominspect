@@ -125,7 +125,7 @@ CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs on every push and
 To release, set `version` in `Cargo.toml`, commit, then push a matching tag:
 
 ```sh
-git tag v0.1.0 && git push origin v0.1.0
+git tag v0.0.1 && git push origin v0.0.1
 ```
 
 [.github/workflows/release.yml](.github/workflows/release.yml) then runs CI, builds the archives for every platform, and publishes them as a GitHub release with generated notes. It fails if the tag doesn't match the version in `Cargo.toml`.
