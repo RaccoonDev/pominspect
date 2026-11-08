@@ -1,6 +1,6 @@
 [package]
 name = "pominspect"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 description = "Terminal UI for exploring a Maven build's effective POM and dependency tree, with the origin of every dependency"
 repository = "https://github.com/RaccoonDev/pominspect"
