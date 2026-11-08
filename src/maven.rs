@@ -5,6 +5,7 @@
 //! is streamed back line by line for the log pane.
 
 use crate::model::Module;
+use crate::overrides;
 use crate::parse::{effective, tree};
 use anyhow::{Context, Result, bail};
 use std::io::{BufRead, BufReader, Read};
@@ -213,7 +214,16 @@ pub fn assemble(effective_xml: &str, tree_text: &str, log: &[String]) -> Result<
                     (Vec::new(), Some(msg))
                 }
             };
-            Module { coords: p.coords, declared: p.declared, managed: p.managed, tree, error }
+            let mut module = Module {
+                coords: p.coords,
+                declared: p.declared,
+                managed: p.managed,
+                tree,
+                error,
+                overrides: Vec::new(),
+            };
+            module.overrides = overrides::find(&module);
+            module
         })
         .collect())
 }
@@ -305,6 +315,6 @@ mod tests {
         let names: Vec<_> = modules.iter().map(|m| m.coords.artifact.as_str()).collect();
         assert_eq!(names, ["multi", "core", "web"]);
         assert!(modules.iter().all(|m| m.error.is_none()));
-        assert_eq!(modules[2].conflicts().len(), 1);
+        assert_eq!(modules[2].overrides.len(), 4);
     }
 }

@@ -27,9 +27,19 @@
     <dependencyManagement>
       <dependencies>
         <dependency>
-          <groupId>org.slf4j</groupId>  <!-- com.example:multi:1.0.0, line 25 -->
-          <artifactId>slf4j-api</artifactId>  <!-- com.example:multi:1.0.0, line 26 -->
-          <version>2.0.13</version>  <!-- com.example:multi:1.0.0, line 27 -->
+          <groupId>com.google.guava</groupId>  <!-- com.example:multi:1.0.0, line 25 -->
+          <artifactId>guava</artifactId>  <!-- com.example:multi:1.0.0, line 26 -->
+          <version>33.2.1-jre</version>  <!-- com.example:multi:1.0.0, line 27 -->
+        </dependency>
+        <dependency>
+          <groupId>org.hamcrest</groupId>  <!-- com.example:multi:1.0.0, line 30 -->
+          <artifactId>hamcrest-core</artifactId>  <!-- com.example:multi:1.0.0, line 31 -->
+          <version>1.1</version>  <!-- com.example:multi:1.0.0, line 32 -->
+        </dependency>
+        <dependency>
+          <groupId>org.slf4j</groupId>  <!-- com.example:multi:1.0.0, line 35 -->
+          <artifactId>slf4j-api</artifactId>  <!-- com.example:multi:1.0.0, line 36 -->
+          <version>2.0.13</version>  <!-- com.example:multi:1.0.0, line 37 -->
         </dependency>
         <dependency>
           <groupId>com.fasterxml.jackson.core</groupId>  <!-- com.fasterxml.jackson:jackson-bom:2.17.1, line 84 -->
@@ -515,17 +525,17 @@
     </reporting>
     <profiles>
       <profile>
-        <id>with-lang</id>  <!-- com.example:multi:1.0.0, line 33 -->
+        <id>with-lang</id>  <!-- com.example:multi:1.0.0, line 43 -->
         <activation>
           <property>
-            <name>withLang</name>  <!-- com.example:multi:1.0.0, line 34 -->
+            <name>withLang</name>  <!-- com.example:multi:1.0.0, line 44 -->
           </property>
         </activation>
         <dependencies>
           <dependency>
-            <groupId>org.apache.commons</groupId>  <!-- com.example:multi:1.0.0, line 37 -->
-            <artifactId>commons-lang3</artifactId>  <!-- com.example:multi:1.0.0, line 38 -->
-            <version>3.14.0</version>  <!-- com.example:multi:1.0.0, line 39 -->
+            <groupId>org.apache.commons</groupId>  <!-- com.example:multi:1.0.0, line 47 -->
+            <artifactId>commons-lang3</artifactId>  <!-- com.example:multi:1.0.0, line 48 -->
+            <version>3.14.0</version>  <!-- com.example:multi:1.0.0, line 49 -->
           </dependency>
         </dependencies>
       </profile>
@@ -552,9 +562,19 @@
     <dependencyManagement>
       <dependencies>
         <dependency>
-          <groupId>org.slf4j</groupId>  <!-- com.example:multi:1.0.0, line 25 -->
-          <artifactId>slf4j-api</artifactId>  <!-- com.example:multi:1.0.0, line 26 -->
-          <version>2.0.13</version>  <!-- com.example:multi:1.0.0, line 27 -->
+          <groupId>com.google.guava</groupId>  <!-- com.example:multi:1.0.0, line 25 -->
+          <artifactId>guava</artifactId>  <!-- com.example:multi:1.0.0, line 26 -->
+          <version>33.2.1-jre</version>  <!-- com.example:multi:1.0.0, line 27 -->
+        </dependency>
+        <dependency>
+          <groupId>org.hamcrest</groupId>  <!-- com.example:multi:1.0.0, line 30 -->
+          <artifactId>hamcrest-core</artifactId>  <!-- com.example:multi:1.0.0, line 31 -->
+          <version>1.1</version>  <!-- com.example:multi:1.0.0, line 32 -->
+        </dependency>
+        <dependency>
+          <groupId>org.slf4j</groupId>  <!-- com.example:multi:1.0.0, line 35 -->
+          <artifactId>slf4j-api</artifactId>  <!-- com.example:multi:1.0.0, line 36 -->
+          <version>2.0.13</version>  <!-- com.example:multi:1.0.0, line 37 -->
         </dependency>
         <dependency>
           <groupId>com.fasterxml.jackson.core</groupId>  <!-- com.fasterxml.jackson:jackson-bom:2.17.1, line 84 -->
@@ -898,7 +918,13 @@
       <dependency>
         <groupId>org.slf4j</groupId>  <!-- com.example:core:1.0.0, line 16 -->
         <artifactId>slf4j-api</artifactId>  <!-- com.example:core:1.0.0, line 17 -->
-        <version>2.0.13</version>  <!-- com.example:multi:1.0.0, line 27 -->
+        <version>2.0.13</version>  <!-- com.example:multi:1.0.0, line 37 -->
+        <scope>compile</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.reflections</groupId>  <!-- com.example:core:1.0.0, line 20 -->
+        <artifactId>reflections</artifactId>  <!-- com.example:core:1.0.0, line 21 -->
+        <version>0.9.11</version>  <!-- com.example:core:1.0.0, line 22 -->
         <scope>compile</scope>
       </dependency>
     </dependencies>
@@ -1140,9 +1166,19 @@
     <dependencyManagement>
       <dependencies>
         <dependency>
-          <groupId>org.slf4j</groupId>  <!-- com.example:multi:1.0.0, line 25 -->
-          <artifactId>slf4j-api</artifactId>  <!-- com.example:multi:1.0.0, line 26 -->
-          <version>2.0.13</version>  <!-- com.example:multi:1.0.0, line 27 -->
+          <groupId>com.google.guava</groupId>  <!-- com.example:multi:1.0.0, line 25 -->
+          <artifactId>guava</artifactId>  <!-- com.example:multi:1.0.0, line 26 -->
+          <version>33.2.1-jre</version>  <!-- com.example:multi:1.0.0, line 27 -->
+        </dependency>
+        <dependency>
+          <groupId>org.hamcrest</groupId>  <!-- com.example:multi:1.0.0, line 30 -->
+          <artifactId>hamcrest-core</artifactId>  <!-- com.example:multi:1.0.0, line 31 -->
+          <version>1.1</version>  <!-- com.example:multi:1.0.0, line 32 -->
+        </dependency>
+        <dependency>
+          <groupId>org.slf4j</groupId>  <!-- com.example:multi:1.0.0, line 35 -->
+          <artifactId>slf4j-api</artifactId>  <!-- com.example:multi:1.0.0, line 36 -->
+          <version>2.0.13</version>  <!-- com.example:multi:1.0.0, line 37 -->
         </dependency>
         <dependency>
           <groupId>com.fasterxml.jackson.core</groupId>  <!-- com.fasterxml.jackson:jackson-bom:2.17.1, line 84 -->

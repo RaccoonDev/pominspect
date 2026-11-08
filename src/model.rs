@@ -4,6 +4,7 @@
 //! This model is independent of any rendering so it can later be exposed as
 //! JSON as well as through the TUI.
 
+use crate::overrides::VersionOverride;
 use std::fmt;
 
 /// A place in a POM that Maven reports as the Origin of a value,
@@ -117,10 +118,6 @@ impl DepNode {
         }
     }
 
-    pub fn is_conflict_loser(&self) -> bool {
-        matches!(self.omitted, Some(Omission::Conflict { .. }))
-    }
-
     /// `group:artifact:version` (plus classifier if any).
     pub fn label(&self) -> String {
         match &self.classifier {
@@ -142,6 +139,8 @@ pub struct Module {
     pub tree: Vec<DepNode>,
     /// Set when Maven could not inspect this module.
     pub error: Option<String>,
+    /// Version Overrides found in `tree`, most risky first.
+    pub overrides: Vec<VersionOverride>,
 }
 
 impl Module {
@@ -185,26 +184,19 @@ impl Module {
         out
     }
 
-    /// True if some occurrence of `key` lost a version conflict.
-    pub fn has_conflict(&self, key: &Key) -> bool {
-        self.occurrences(key)
+    /// The Version Override whose edge is the node at `path`, if any.
+    pub fn override_at(&self, path: &[usize]) -> Option<&VersionOverride> {
+        self.overrides
             .iter()
-            .any(|(_, n)| n.is_conflict_loser())
+            .find(|o| o.paths.iter().any(|p| p == path))
     }
 
-    /// Every key that has at least one conflict-losing occurrence.
-    pub fn conflicts(&self) -> Vec<Key> {
-        let mut keys = Vec::new();
-        fn walk(nodes: &[DepNode], keys: &mut Vec<Key>) {
-            for n in nodes {
-                if n.is_conflict_loser() && !keys.contains(&n.key()) {
-                    keys.push(n.key());
-                }
-                walk(&n.children, keys);
-            }
-        }
-        walk(&self.tree, &mut keys);
-        keys
+    /// The path of the occurrence of `key` that Maven resolved (not omitted).
+    pub fn resolved_path(&self, key: &Key) -> Option<Vec<usize>> {
+        self.occurrences(key)
+            .into_iter()
+            .find(|(_, n)| n.omitted.is_none())
+            .map(|(p, _)| p)
     }
 
     /// Why the node at `path` is present and has its version.
@@ -246,7 +238,7 @@ impl Module {
         })
     }
 
-    fn managed_entry(&self, key: &Key) -> Option<&DeclaredDependency> {
+    pub fn managed_entry(&self, key: &Key) -> Option<&DeclaredDependency> {
         self.managed.iter().find(|m| &m.key() == key)
     }
 }
@@ -327,7 +319,7 @@ mod tests {
             o.version,
             VersionOrigin::Managed {
                 from: "2.0.7".into(),
-                at: loc("com.example:multi:1.0.0", 27)
+                at: loc("com.example:multi:1.0.0", 37)
             }
         );
     }
@@ -345,13 +337,13 @@ mod tests {
     }
 
     #[test]
-    fn finds_conflicts_and_occurrences() {
+    fn finds_occurrences_and_the_resolved_one() {
         let m = web();
         let lang = Key {
             group: "org.apache.commons".into(),
             artifact: "commons-lang3".into(),
         };
-        assert_eq!(m.conflicts(), vec![lang.clone()]);
+        assert_eq!(m.resolved_path(&lang), Some(vec![2]));
         let paths: Vec<_> = m.occurrences(&lang).into_iter().map(|(p, _)| p).collect();
         assert_eq!(paths, vec![vec![2], vec![3, 0]]);
     }

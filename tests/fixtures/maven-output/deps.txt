@@ -3,13 +3,31 @@ com.example:core:jar:1.0.0
 +- com.fasterxml.jackson.core:jackson-databind:jar:2.17.1:compile
 |  +- com.fasterxml.jackson.core:jackson-annotations:jar:2.17.1:compile (version managed from 2.17.1)
 |  \- com.fasterxml.jackson.core:jackson-core:jar:2.17.1:compile (version managed from 2.17.1)
-\- org.slf4j:slf4j-api:jar:2.0.13:compile
++- org.slf4j:slf4j-api:jar:2.0.13:compile
+\- org.reflections:reflections:jar:0.9.11:compile
+   +- com.google.guava:guava:jar:33.2.1-jre:compile (version managed from 20.0)
+   |  +- com.google.guava:failureaccess:jar:1.0.2:compile
+   |  +- com.google.guava:listenablefuture:jar:9999.0-empty-to-avoid-conflict-with-guava:compile
+   |  +- com.google.code.findbugs:jsr305:jar:3.0.2:compile
+   |  +- org.checkerframework:checker-qual:jar:3.42.0:compile
+   |  +- com.google.errorprone:error_prone_annotations:jar:2.26.1:compile
+   |  \- com.google.j2objc:j2objc-annotations:jar:3.0.0:compile
+   \- org.javassist:javassist:jar:3.21.0-GA:compile
 com.example:web:jar:1.0.0
 +- com.example:core:jar:1.0.0:compile
 |  +- com.fasterxml.jackson.core:jackson-databind:jar:2.17.1:compile (version managed from 2.17.1)
 |  |  +- com.fasterxml.jackson.core:jackson-annotations:jar:2.17.1:compile (version managed from 2.17.1)
 |  |  \- com.fasterxml.jackson.core:jackson-core:jar:2.17.1:compile (version managed from 2.17.1)
-|  \- org.slf4j:slf4j-api:jar:2.0.13:compile (version managed from 2.0.13)
+|  +- org.slf4j:slf4j-api:jar:2.0.13:compile (version managed from 2.0.13)
+|  \- org.reflections:reflections:jar:0.9.11:compile
+|     +- com.google.guava:guava:jar:33.2.1-jre:compile (version managed from 20.0)
+|     |  +- com.google.guava:failureaccess:jar:1.0.2:compile
+|     |  +- com.google.guava:listenablefuture:jar:9999.0-empty-to-avoid-conflict-with-guava:compile
+|     |  +- com.google.code.findbugs:jsr305:jar:3.0.2:compile
+|     |  +- org.checkerframework:checker-qual:jar:3.42.0:compile
+|     |  +- com.google.errorprone:error_prone_annotations:jar:2.26.1:compile
+|     |  \- com.google.j2objc:j2objc-annotations:jar:3.0.0:compile
+|     \- org.javassist:javassist:jar:3.21.0-GA:compile
 +- ch.qos.logback:logback-classic:jar:1.4.14:compile
 |  +- ch.qos.logback:logback-core:jar:1.4.14:compile
 |  \- (org.slf4j:slf4j-api:jar:2.0.13:compile - version managed from 2.0.7; omitted for duplicate)
@@ -17,4 +35,4 @@ com.example:web:jar:1.0.0
 +- org.apache.commons:commons-text:jar:1.12.0:compile
 |  \- (org.apache.commons:commons-lang3:jar:3.14.0:compile - omitted for conflict with 3.12.0)
 \- junit:junit:jar:4.13.2:test
-   \- org.hamcrest:hamcrest-core:jar:1.3:test
+   \- org.hamcrest:hamcrest-core:jar:1.1:test (version managed from 1.3)

@@ -2,16 +2,59 @@
 
 use crate::maven::{self, Request};
 use crate::model::{DepNode, Key, Module};
+use crate::overrides::{Change, VersionOverride};
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::widgets::ListState;
 use std::collections::HashSet;
 use std::sync::mpsc::Sender;
 
 /// Identifies an entry of the navigation tree:
-/// `[m]` a module, `[m, 0]` its Dependencies facet, `[m, 0, i, j, …]` a dependency node.
+/// - `[m]` a module
+/// - `[m, 0]` its Dependencies facet, `[m, 0, i, j, …]` a dependency node
+/// - `[m, 1]` its Version Overrides facet, `[m, 1, g]` a Severity group, `[m, 1, g, i]` an override
 pub type NodeId = Vec<usize>;
 
 pub const FACET_DEPENDENCIES: usize = 0;
+pub const FACET_OVERRIDES: usize = 1;
+
+/// How the Version Overrides facet groups its entries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Group {
+    Downgrade,
+    MajorUpgrade,
+    Other,
+}
+
+impl Group {
+    fn of(change: Change) -> Self {
+        match change {
+            Change::Downgrade => Group::Downgrade,
+            Change::MajorUpgrade => Group::MajorUpgrade,
+            _ => Group::Other,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Group::Downgrade => "▼ Downgrade",
+            Group::MajorUpgrade => "▲ Major Upgrade",
+            Group::Other => "· Minor / Patch / Unclassified",
+        }
+    }
+}
+
+/// The non-empty Severity groups of a module's overrides, in display order.
+pub fn groups(module: &Module) -> Vec<(Group, Vec<&VersionOverride>)> {
+    let mut out: Vec<(Group, Vec<&VersionOverride>)> = Vec::new();
+    for o in &module.overrides {
+        let g = Group::of(o.change);
+        match out.iter_mut().find(|(k, _)| *k == g) {
+            Some((_, items)) => items.push(o),
+            None => out.push((g, vec![o])),
+        }
+    }
+    out
+}
 
 pub enum Entry<'a> {
     Module(&'a Module),
@@ -20,6 +63,15 @@ pub enum Entry<'a> {
         module: &'a Module,
         path: &'a [usize],
         node: &'a DepNode,
+    },
+    Overrides(&'a Module),
+    OverrideGroup {
+        group: Group,
+        items: Vec<&'a VersionOverride>,
+    },
+    Override {
+        module: &'a Module,
+        item: &'a VersionOverride,
     },
 }
 
@@ -126,10 +178,11 @@ impl App {
 
     pub fn entry<'a>(&'a self, id: &'a [usize]) -> Option<Entry<'a>> {
         let module = self.modules.get(*id.first()?)?;
-        match id.len() {
-            1 => Some(Entry::Module(module)),
-            2 => Some(Entry::Dependencies(module)),
-            _ => {
+        match (id.len(), id.get(1).copied()) {
+            (1, _) => Some(Entry::Module(module)),
+            (2, Some(FACET_DEPENDENCIES)) => Some(Entry::Dependencies(module)),
+            (2, Some(FACET_OVERRIDES)) => Some(Entry::Overrides(module)),
+            (_, Some(FACET_DEPENDENCIES)) => {
                 let path = &id[2..];
                 Some(Entry::Dep {
                     module,
@@ -137,15 +190,29 @@ impl App {
                     node: module.node(path)?,
                 })
             }
+            (3, Some(FACET_OVERRIDES)) => {
+                let (group, items) = groups(module).into_iter().nth(id[2])?;
+                Some(Entry::OverrideGroup { group, items })
+            }
+            (4, Some(FACET_OVERRIDES)) => {
+                let (_, items) = groups(module).into_iter().nth(id[2])?;
+                Some(Entry::Override {
+                    module,
+                    item: items.get(id[3])?,
+                })
+            }
+            _ => None,
         }
     }
 
     fn children_count(&self, id: &[usize]) -> usize {
         match self.entry(id) {
-            Some(Entry::Module(_)) => 1,
+            Some(Entry::Module(_)) => 2,
             Some(Entry::Dependencies(m)) => m.tree.len(),
             Some(Entry::Dep { node, .. }) => node.children.len(),
-            None => 0,
+            Some(Entry::Overrides(m)) => groups(m).len(),
+            Some(Entry::OverrideGroup { items, .. }) => items.len(),
+            Some(Entry::Override { .. }) | None => 0,
         }
     }
 
@@ -200,6 +267,17 @@ impl App {
             Some(Entry::Module(m)) => m.coords.to_string(),
             Some(Entry::Dependencies(_)) => "dependencies".into(),
             Some(Entry::Dep { node, .. }) => node.label(),
+            Some(Entry::Overrides(_)) => "version overrides".into(),
+            Some(Entry::OverrideGroup { group, .. }) => group.label().into(),
+            Some(Entry::Override { item, .. }) => format!(
+                "{} {}:{} {} {} {}",
+                item.requester,
+                item.library,
+                item.requested,
+                item.resolved,
+                item.change.short(),
+                item.change.label()
+            ),
             None => String::new(),
         }
     }
@@ -300,7 +378,27 @@ impl App {
     pub fn selected_key(&self) -> Option<Key> {
         match self.entry(&self.selected)? {
             Entry::Dep { node, .. } => Some(node.key()),
+            Entry::Override { item, .. } => Some(item.library.clone()),
             _ => None,
+        }
+    }
+
+    /// On a Version Override, selects its node in the dependency tree.
+    fn jump_to_tree(&mut self) -> bool {
+        let target = match self.entry(&self.selected) {
+            Some(Entry::Override { item, .. }) => item.paths.first().map(|p| {
+                let mut id = vec![self.selected[0], FACET_DEPENDENCIES];
+                id.extend(p);
+                id
+            }),
+            _ => None,
+        };
+        match target {
+            Some(id) => {
+                self.reveal(&id);
+                true
+            }
+            None => false,
         }
     }
 
@@ -365,6 +463,7 @@ impl App {
                 }
                 self.fix_selection();
             }
+            KeyCode::Enter if self.jump_to_tree() => {}
             KeyCode::Enter | KeyCode::Char(' ') => {
                 let id = self.selected.clone();
                 if !self.expanded.remove(&id) && self.children_count(&id) > 0 {

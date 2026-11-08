@@ -7,18 +7,22 @@ A terminal UI for exploring a Maven build's effective POM and dependency tree.
 - which POM declared it, and on which line
 - where its version came from: the POM itself, a parent, an imported BOM, or a `dependencyManagement` entry that overrode the requested version
 - which path of dependencies pulled it in
-- where else it appears, and which version won a conflict
+- where else it appears
+
+It also warns about **Version Overrides**: places where a library gets a different version than the dependency requiring it asked for. For example, `corporate-lib` was built against `aws-sdk` 2.x, but your build's BOM upgrades the SDK to 3.x. That kind of mismatch compiles fine and then fails at runtime.
 
 ```
 ┌ Modules ─────────────────────────────────────────┐┌ Detail ─────────────────────────────────────────────┐
 │▾ multi (pom)                                     ││org.apache.commons:commons-lang3:3.14.0              │
-│▾ web (jar) ⚠ 1                                   ││type: jar   scope: compile                           │
+│▾ web (jar) ⚠ 3                                   ││type: jar   scope: compile                           │
 │  ▾ Dependencies (5 direct)                       ││not resolved here: omitted for conflict with 3.12.0  │
 │    ▸ logback-classic 1.4.14  ch.qos.logback      ││                                                     │
-│      commons-lang3 3.12.0 ⚠  org.apache.commons  ││Origin                                               │
-│    ▾ commons-text 1.12.0  org.apache.commons     ││  pulled in  ← by org.apache.commons:commons-text... │
-│        commons-lang3 3.14.0 ✗ conflict, 3.12.0 w ││  version    ← as requested by org.apache.commons... │
-│    ▸ junit 4.13.2 [test]  junit                  ││                                                     │
+│      commons-lang3 3.12.0  org.apache.commons    ││Version Override  ▼ Downgrade (warning)              │
+│    ▾ commons-text 1.12.0  org.apache.commons     ││  requester  org.apache.commons:commons-text:1.12.0  │
+│        commons-lang3 3.14.0 ▼ downgrade (gets 3. ││  asked      3.14.0                                  │
+│    ▸ junit 4.13.2 [test]  junit                  ││  gets       3.12.0                                  │
+│  ▸ Version Overrides (4) ⚠ 3                     ││  because    Mediation: a nearer path wins (web → c… │
+│                                                  ││                                                     │
 │                                                  ││Path                                                 │
 │                                                  ││web → commons-text:1.12.0 → commons-lang3:3.14.0     │
 └──────────────────────────────────────────────────┘└─────────────────────────────────────────────────────┘
@@ -67,25 +71,48 @@ The screen opens straight away while Maven runs in the background; the status ba
 
 ## Reading the screen
 
-**Left: the navigation tree.** Each module contains a *Dependencies* entry, which holds the module's resolved dependency tree.
+**Left: the navigation tree.** Each module contains two entries: *Dependencies*, which holds the module's resolved dependency tree, and *Version Overrides* (see below).
 
 | Marker | Meaning |
 | --- | --- |
-| `⚠ 2` next to a module | The module has 2 dependencies with version conflicts |
-| `⚠` next to a dependency | This is the version that won a conflict |
-| `✗ conflict, X wins` | Maven left this version out because version X won |
-| crossed out, `(duplicate)` | Already present elsewhere in the tree, so not counted again here |
+| `⚠ 3` next to a module | The module has 3 Version Override warnings |
+| `▲ major (asked 2.4)` next to a dependency | A Version Override: the dependency requiring it asked for 2.4 and gets the version shown |
+| `▼ downgrade (gets 3.12.0)` | The same, on a crossed-out entry that shows the *requested* version |
+| crossed out | Maven left this entry out: a duplicate, or it lost to another version |
 | `[test]`, `[provided]`, … | Scope, shown when it isn't `compile` |
 | `✗ error` next to a module | Maven couldn't inspect this module; select it to see Maven's error |
 
 **Right: details of the selected entry.**
 
-- **Module:** coordinates, dependency counts, version conflicts, and any Inspection Error.
-- **Dependencies:** how many direct and resolved artifacts the module has, and its version conflicts.
+- **Module:** coordinates, dependency counts, a summary of Version Overrides, and any Inspection Error.
+- **Dependencies:** how many direct and resolved artifacts the module has.
 - **A dependency:**
+  - **Version Override**, if this entry is one: who asked for which version, what it gets, and why (see below).
   - **Origin**: `declared ←` gives the POM and line of a direct dependency; `pulled in ←` names the dependency that brought in a transitive one. `version ←` shows where the version came from. If `dependencyManagement` replaced the version, it shows both the requested and the managed version.
   - **Path** from the module down to this dependency.
-  - **Other occurrences** of the same `groupId:artifactId` in the module, each marked as resolved (`✓`) or omitted (`✗`).
+  - **Other occurrences** of the same `groupId:artifactId` in the module, each marked as resolved (`✓`), omitted (`✗`), or as a Version Override (what its requester asked for and got).
+
+## Version Overrides
+
+A **Version Override** is a dependency that gets a different version than the artifact requiring it (its **requester**) asked for. There are two causes, both reported by Maven:
+
+- **Mediation**: several paths ask for different versions and Maven keeps the nearest one (Maven calls the losers "omitted for conflict").
+- **Management**: a `dependencyManagement` entry or an imported BOM replaces the version.
+
+Each override is graded by comparing the two version numbers:
+
+| Severity | Example | Warning? |
+| --- | --- | --- |
+| `▼` Downgrade | asked 3.14.0, gets 3.12.0 | yes: code built against the newer version may call methods that don't exist (`NoSuchMethodError`) |
+| `▲` Major Upgrade | asked 2.4, gets 3.0 (below 1.0: asked 0.3, gets 0.4) | yes: likely breaking changes |
+| `▲` Minor / Patch Upgrade | asked 2.0.7, gets 2.0.13 | no |
+| `?` Unclassified | asked 1.0-RC1, gets 1.0 | no: the numbers match or don't parse, so pominspect doesn't guess |
+
+Overrides that only affect `test` or `provided` scope keep their label but rank one level lower: a test-scope Downgrade is still a warning, a test-scope Major Upgrade isn't.
+
+Version numbers are a heuristic, not proof: a major upgrade can be compatible, and a minor one can break. Treat a warning as "check this", not "this is broken". Libraries that changed their `groupId` between versions (like the AWS SDK's move from `com.amazonaws` to `software.amazon.awssdk`) look like two unrelated libraries to Maven, so no override is reported for them.
+
+Each module's **Version Overrides** entry lists its overrides grouped into Downgrade, Major Upgrade, and everything else. Each row shows the library, the versions, and the requester. Press `Enter` on one to jump to it in the dependency tree, or `w` to see every path to that library in every module.
 
 ## Keys
 
@@ -94,7 +121,7 @@ The screen opens straight away while Maven runs in the background; the status ba
 | `↑` `↓` / `j` `k` | Move |
 | `→` / `l` | Expand, or step into |
 | `←` / `h` | Collapse, or go to the parent |
-| `Enter` / `Space` | Toggle expand |
+| `Enter` / `Space` | Toggle expand; on a Version Override, jump to it in the dependency tree |
 | `E` / `C` | Expand / collapse everything below the selection |
 | `PgUp` `PgDn` `g` `G` | Page up / down, top, bottom |
 | `/` | Search by `group:artifact:version` (any part, case-insensitive) |

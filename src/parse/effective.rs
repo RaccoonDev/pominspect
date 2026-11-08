@@ -200,7 +200,7 @@ mod tests {
             .iter()
             .find(|d| d.artifact == "slf4j-api")
             .unwrap();
-        assert_eq!(slf4j.version_at, loc("com.example:multi:1.0.0", 27));
+        assert_eq!(slf4j.version_at, loc("com.example:multi:1.0.0", 37));
         assert_eq!(projects[2].declared.len(), 5);
     }
 }

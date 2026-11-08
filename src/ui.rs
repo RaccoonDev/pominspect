@@ -1,7 +1,8 @@
 //! Rendering of the TUI.
 
-use crate::app::{App, Entry, Mode, Row, Status};
+use crate::app::{App, Entry, Group, Mode, Row, Status};
 use crate::model::{DepNode, Key, Module, Omission, Presence, VersionOrigin};
+use crate::overrides::{Cause, Change, VersionOverride};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style, Stylize};
@@ -18,6 +19,55 @@ fn heading(s: &str) -> Line<'static> {
 }
 fn warn() -> Style {
     Style::new().fg(Color::Yellow)
+}
+
+/// Colour for a Version Override: red for downgrades, yellow for other
+/// warnings, dim for informational ones.
+fn override_style(o: &VersionOverride) -> Style {
+    match (o.is_warning(), o.change) {
+        (true, Change::Downgrade) => Style::new().fg(Color::LightRed),
+        (true, _) => warn(),
+        (false, _) => dim(),
+    }
+}
+
+/// `▲ major (asked 2.4)` next to a node showing the resolved version,
+/// `▼ downgrade (gets 3.12.0)` next to one showing the requested version,
+/// `▲ major: asked 2.4, gets 3.0` where no version is shown.
+fn override_badge(o: &VersionOverride, shown: Option<&str>) -> Span<'static> {
+    let versions = match shown {
+        Some(v) if v == o.resolved => format!(" (asked {})", o.requested),
+        Some(_) => format!(" (gets {})", o.resolved),
+        None => format!(": asked {}, gets {}", o.requested, o.resolved),
+    };
+    Span::styled(
+        format!(" {} {}{versions}", o.change.symbol(), o.change.short()),
+        override_style(o),
+    )
+}
+
+fn cause_text(module: &Module, o: &VersionOverride) -> String {
+    match &o.cause {
+        Cause::Mediation => {
+            let winner = module
+                .resolved_path(&o.library)
+                .map(|p| {
+                    let mut s = module.coords.artifact.clone();
+                    for n in module.chain(&p) {
+                        s.push_str(&format!(" → {}:{}", n.artifact, n.version));
+                    }
+                    s
+                })
+                .unwrap_or_else(|| "another path".into());
+            format!("Mediation: a nearer path wins ({winner})")
+        }
+        Cause::Management { at: Some(at) } => format!("Management: dependencyManagement, {at}"),
+        Cause::Management { at: None } => "Management: dependencyManagement".into(),
+    }
+}
+
+fn warning_count(m: &Module) -> usize {
+    m.overrides.iter().filter(|o| o.is_warning()).count()
 }
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
@@ -83,16 +133,16 @@ fn row_line(app: &App, row: &Row) -> Line<'static> {
             if m.error.is_some() {
                 spans.push(Span::styled(" ✗ error", Style::new().fg(Color::Red)));
             }
-            let conflicts = m.conflicts().len();
-            if conflicts > 0 {
-                spans.push(Span::styled(format!(" ⚠ {conflicts}"), warn()));
+            let warnings = warning_count(m);
+            if warnings > 0 {
+                spans.push(Span::styled(format!(" ⚠ {warnings}"), warn()));
             }
         }
         Some(Entry::Dependencies(m)) => {
             spans.push(Span::raw("Dependencies"));
             spans.push(Span::styled(format!(" ({} direct)", m.tree.len()), dim()));
         }
-        Some(Entry::Dep { module, node, .. }) => {
+        Some(Entry::Dep { module, node, path }) => {
             let omitted = node.omitted.is_some();
             let name = Span::raw(format!("{} {}", node.artifact, node.version));
             spans.push(if omitted {
@@ -106,16 +156,46 @@ fn row_line(app: &App, row: &Row) -> Line<'static> {
                     Style::new().fg(Color::Magenta),
                 ));
             }
-            match &node.omitted {
-                Some(Omission::Conflict { winner }) => {
-                    spans.push(Span::styled(format!(" ✗ conflict, {winner} wins"), warn()))
+            match (&node.omitted, module.override_at(path)) {
+                (_, Some(o)) => spans.push(override_badge(o, Some(&node.version))),
+                (Some(Omission::Duplicate), None) => {
+                    spans.push(Span::styled(" (duplicate)", dim()))
                 }
-                Some(Omission::Duplicate) => spans.push(Span::styled(" (duplicate)", dim())),
-                Some(o) => spans.push(Span::styled(format!(" ({o})"), dim())),
-                None if module.has_conflict(&node.key()) => spans.push(Span::styled(" ⚠", warn())),
-                None => {}
+                (Some(o), None) => spans.push(Span::styled(format!(" ({o})"), dim())),
+                (None, None) => {}
             }
             spans.push(Span::styled(format!("  {}", node.group), dim()));
+        }
+        Some(Entry::Overrides(m)) => {
+            spans.push(Span::raw("Version Overrides"));
+            spans.push(Span::styled(format!(" ({})", m.overrides.len()), dim()));
+            let warnings = warning_count(m);
+            if warnings > 0 {
+                spans.push(Span::styled(format!(" ⚠ {warnings}"), warn()));
+            }
+        }
+        Some(Entry::OverrideGroup { group, items, .. }) => {
+            let style = match group {
+                Group::Downgrade => Style::new().fg(Color::LightRed),
+                Group::MajorUpgrade => warn(),
+                Group::Other => dim(),
+            };
+            spans.push(Span::styled(group.label(), style));
+            spans.push(Span::styled(format!(" ({})", items.len()), dim()));
+        }
+        Some(Entry::Override { item, .. }) => {
+            spans.push(Span::raw(item.library.artifact.clone()));
+            spans.push(override_badge(item, None));
+            if item.is_reduced_scope() {
+                spans.push(Span::styled(
+                    format!(" [{}]", item.scope),
+                    Style::new().fg(Color::Magenta),
+                ));
+            }
+            spans.push(Span::styled(
+                format!("  ← {}", short_gav(&item.requester)),
+                dim(),
+            ));
         }
         None => {}
     }
@@ -127,6 +207,9 @@ fn detail_text(app: &App) -> Text<'static> {
         Some(Entry::Module(m)) => module_detail(m),
         Some(Entry::Dependencies(m)) => dependencies_detail(m),
         Some(Entry::Dep { module, path, node }) => dep_detail(module, path, node),
+        Some(Entry::Overrides(m)) => overrides_detail(m),
+        Some(Entry::OverrideGroup { group, items, .. }) => group_detail(group, &items),
+        Some(Entry::Override { module, item }) => override_detail(module, item),
         None => Text::raw(""),
     }
 }
@@ -150,7 +233,7 @@ fn module_detail(m: &Module) -> Text<'static> {
         "managed dependencies:  {}",
         m.managed.len()
     )));
-    conflicts_section(m, &mut lines);
+    overrides_summary(m, &mut lines);
     Text::from(lines)
 }
 
@@ -171,38 +254,138 @@ fn dependencies_detail(m: &Module) -> Text<'static> {
         Line::from(format!("direct:              {}", m.tree.len())),
         Line::from(format!("resolved artifacts:  {}", resolved.len())),
     ];
-    conflicts_section(m, &mut lines);
+    overrides_summary(m, &mut lines);
     Text::from(lines)
 }
 
-fn conflicts_section(m: &Module, lines: &mut Vec<Line<'static>>) {
-    let conflicts = m.conflicts();
-    if conflicts.is_empty() {
+/// `group:artifact:version` → `artifact:version`
+fn short_gav(gav: &str) -> String {
+    let parts: Vec<&str> = gav.split(':').collect();
+    match parts.as_slice() {
+        [_, a, v] => format!("{a}:{v}"),
+        _ => gav.to_string(),
+    }
+}
+
+fn overrides_summary(m: &Module, lines: &mut Vec<Line<'static>>) {
+    lines.push(Line::raw(""));
+    if m.overrides.is_empty() {
+        lines.push(Line::styled("no Version Overrides", dim()));
         return;
     }
-    lines.push(Line::raw(""));
-    lines.push(heading(&format!("Version conflicts ({})", conflicts.len())));
-    for key in conflicts {
-        let occ = m.occurrences(&key);
-        let winner = occ
-            .iter()
-            .find(|(_, n)| n.omitted.is_none())
-            .map(|(_, n)| n.version.clone());
-        let losers: Vec<String> = occ
-            .iter()
-            .filter(|(_, n)| n.is_conflict_loser())
-            .map(|(_, n)| n.version.clone())
-            .collect();
-        lines.push(Line::from(vec![
-            Span::styled("⚠ ", warn()),
-            Span::raw(key.to_string()),
-            Span::raw(format!(
-                "  {} wins over {}",
-                winner.unwrap_or("?".into()),
-                losers.join(", ")
-            )),
-        ]));
+    lines.push(heading(&format!(
+        "Version Overrides ({}, {} warnings)",
+        m.overrides.len(),
+        warning_count(m)
+    )));
+    for change in [
+        Change::Downgrade,
+        Change::MajorUpgrade,
+        Change::MinorUpgrade,
+        Change::PatchUpgrade,
+        Change::Unclassified,
+    ] {
+        let n = m.overrides.iter().filter(|o| o.change == change).count();
+        if n > 0 {
+            lines.push(Line::raw(format!(
+                "  {} {:<14} {n}",
+                change.symbol(),
+                change.label()
+            )));
+        }
     }
+}
+
+fn override_row(o: &VersionOverride) -> Line<'static> {
+    let mut spans = vec![
+        Span::raw(format!("{} ", short_gav(&o.requester))),
+        Span::styled("→ ", dim()),
+        Span::raw(o.library.artifact.clone()),
+        override_badge(o, None),
+    ];
+    if o.is_reduced_scope() {
+        spans.push(Span::styled(
+            format!(" [{}]", o.scope),
+            Style::new().fg(Color::Magenta),
+        ));
+    }
+    Line::from(spans)
+}
+
+/// The "Version Override" section shown for an override and for its tree node.
+fn override_section(module: &Module, o: &VersionOverride, lines: &mut Vec<Line<'static>>) {
+    let verdict = if o.is_warning() {
+        "warning"
+    } else {
+        "informational"
+    };
+    lines.push(Line::from(vec![
+        Span::styled("Version Override  ", Style::new().fg(Color::Cyan).bold()),
+        Span::styled(
+            format!("{} {} ({verdict})", o.change.symbol(), o.change.label()),
+            override_style(o),
+        ),
+    ]));
+    lines.push(Line::raw(format!("  requester  {}", o.requester)));
+    lines.push(Line::raw(format!("  asked      {}", o.requested)));
+    lines.push(Line::raw(format!("  gets       {}", o.resolved)));
+    lines.push(Line::raw(format!("  because    {}", cause_text(module, o))));
+    match o.scope.as_str() {
+        "test" => lines.push(Line::styled(
+            "  scope      test: only the test classpath is affected, so it ranks one level lower",
+            dim(),
+        )),
+        "provided" => lines.push(Line::styled(
+            "  scope      provided: the runtime container decides which version is present, so it ranks one level lower",
+            dim(),
+        )),
+        _ => {}
+    }
+}
+
+fn overrides_detail(m: &Module) -> Text<'static> {
+    let mut lines = vec![
+        Line::from(format!("Version Overrides in {}", m.coords.artifact)).bold(),
+        Line::raw(""),
+        Line::styled(
+            "Dependencies that get a different version than the artifact requiring them asked for.",
+            dim(),
+        ),
+        Line::styled(
+            "Downgrades and major upgrades are warnings; test and provided scope rank one level lower.",
+            dim(),
+        ),
+    ];
+    overrides_summary(m, &mut lines);
+    Text::from(lines)
+}
+
+fn group_detail(group: Group, items: &[&VersionOverride]) -> Text<'static> {
+    let mut lines = vec![
+        Line::from(format!("{} ({})", group.label(), items.len())).bold(),
+        Line::raw(""),
+    ];
+    lines.extend(items.iter().map(|o| override_row(o)));
+    Text::from(lines)
+}
+
+fn override_detail(module: &Module, o: &VersionOverride) -> Text<'static> {
+    let mut lines = vec![
+        Line::from(format!("{}:{}", o.library, o.resolved)).bold(),
+        Line::raw(""),
+    ];
+    override_section(module, o, &mut lines);
+    lines.push(Line::raw(""));
+    lines.push(heading(&format!("Paths ({})", o.paths.len())));
+    for p in &o.paths {
+        lines.push(path_line(module, p));
+    }
+    lines.push(Line::raw(""));
+    lines.push(Line::styled(
+        "Enter: show in the dependency tree   w: why, across all modules",
+        dim(),
+    ));
+    Text::from(lines)
 }
 
 fn path_line(module: &Module, path: &[usize]) -> Line<'static> {
@@ -223,7 +406,11 @@ fn dep_detail(module: &Module, path: &[usize], node: &DepNode) -> Text<'static> 
     facts.extend(node.notes.iter().cloned());
     lines.push(Line::from(facts.join("   ")));
     if let Some(o) = &node.omitted {
-        lines.push(Line::styled(format!("not resolved here: {o}"), warn()));
+        lines.push(Line::styled(format!("not resolved here: {o}"), dim()));
+    }
+    if let Some(o) = module.override_at(path) {
+        lines.push(Line::raw(""));
+        override_section(module, o, &mut lines);
     }
 
     lines.push(Line::raw(""));
@@ -274,7 +461,7 @@ fn dep_detail(module: &Module, path: &[usize], node: &DepNode) -> Text<'static> 
             others.len()
         )));
         for (p, n) in others {
-            lines.push(occurrence_line(n));
+            lines.push(occurrence_line(module, &p, n));
             lines.push(path_line(module, &p));
         }
     }
@@ -286,7 +473,22 @@ fn dep_detail(module: &Module, path: &[usize], node: &DepNode) -> Text<'static> 
     Text::from(lines)
 }
 
-fn occurrence_line(n: &DepNode) -> Line<'static> {
+/// One occurrence of a library: what its Requester asked for and got if it is
+/// a Version Override, otherwise whether Maven resolved it.
+fn occurrence_line(module: &Module, path: &[usize], n: &DepNode) -> Line<'static> {
+    if let Some(o) = module.override_at(path) {
+        return Line::from(vec![
+            Span::styled(format!("{} ", o.change.symbol()), override_style(o)),
+            Span::raw(format!(
+                "{} asked {} → gets {}",
+                short_gav(&o.requester),
+                o.requested,
+                o.resolved
+            )),
+            Span::styled(format!("  {}", o.change.short()), override_style(o)),
+            Span::styled(format!("  ({})", cause_text(module, o)), dim()),
+        ]);
+    }
     match &n.omitted {
         None => Line::from(vec![
             Span::styled("✓ ", Style::new().fg(Color::Green)),
@@ -309,7 +511,7 @@ fn draw_why(frame: &mut Frame, app: &App, key: &Key) {
         }
         lines.push(heading(&m.coords.artifact));
         for (path, n) in occ {
-            lines.push(occurrence_line(n));
+            lines.push(occurrence_line(m, &path, n));
             lines.push(path_line(m, &path));
         }
         lines.push(Line::raw(""));
@@ -331,7 +533,10 @@ fn draw_help(frame: &mut Frame) {
         ("↑↓ / j k", "move"),
         ("→ / l", "expand, or enter"),
         ("← / h", "collapse, or go to parent"),
-        ("Enter / Space", "toggle"),
+        (
+            "Enter / Space",
+            "toggle; on a Version Override, show it in the tree",
+        ),
         ("E / C", "expand / collapse everything below"),
         ("PgUp PgDn g G", "page, top, bottom"),
         ("/", "search (group:artifact:version)"),
@@ -494,14 +699,54 @@ mod tests {
     }
 
     #[test]
-    fn search_reveals_conflicting_dependency_and_shows_origin() {
+    fn tree_badges_the_overridden_edge_and_shows_why() {
         let mut app = loaded_app();
         press(&mut app, "/commons-lang3:3.14\n");
         let s = screen(&mut app);
         println!("{s}");
-        assert!(s.contains("commons-lang3 3.14.0 ✗ conflict, 3.12.0 wins"));
-        assert!(s.contains("pulled in  ← by org.apache.commons:commons-text:1.12.0"));
-        assert!(s.contains("web → commons-text:1.12.0 → commons-lang3:3.14.0"));
+        assert!(s.contains("web (jar) ⚠ 3"));
+        assert!(s.contains("commons-lang3 3.14.0 ▼ downgrade (gets 3.12.0)"));
+        assert!(s.contains("Version Override  ▼ Downgrade (warning)"));
+        assert!(s.contains("requester  org.apache.commons:commons-text:1.12.0"));
+        assert!(s.contains("Mediation: a nearer path wins (web → commons-lang3:3.12.0)"));
+        assert!(!s.contains("conflict,"), "old conflict markers are gone");
+    }
+
+    #[test]
+    fn overrides_facet_groups_by_severity_and_jumps_to_tree() {
+        let mut app = loaded_app();
+        // web is the third module; open its Version Overrides facet and the Major group.
+        press(&mut app, "/version overrides\nnn");
+        press(&mut app, "l");
+        let s = screen(&mut app);
+        println!("{s}");
+        assert!(s.contains("Version Overrides (4) ⚠ 3"));
+        assert!(s.contains("▼ Downgrade (2)"));
+        assert!(s.contains("▲ Major Upgrade (1)"));
+        assert!(s.contains("· Minor / Patch / Unclassified (1)"));
+
+        press(&mut app, "/guava\n");
+        let s = screen(&mut app);
+        println!("{s}");
+        assert!(s.contains("guava ▲ major: asked 20.0, gets 33.2.1-jre  ← reflect"));
+        assert!(s.contains("requester  org.reflections:reflections:0.9.11"));
+        assert!(s.contains("Management: dependencyManagement, com.example:multi:1.0.0,"));
+
+        press(&mut app, "\n");
+        let s = screen(&mut app);
+        println!("{s}");
+        assert!(matches!(app.entry(&app.selected), Some(Entry::Dep { .. })));
+        assert!(s.contains("pulled in  ← by org.reflections:reflections:0.9.11"));
+    }
+
+    #[test]
+    fn test_scope_downgrade_explains_its_ranking() {
+        let mut app = loaded_app();
+        press(&mut app, "/hamcrest-core\n");
+        let s = screen(&mut app);
+        println!("{s}");
+        assert!(s.contains("hamcrest-core 1.1 [test] ▼ downgrade (asked 1.3)"));
+        assert!(s.contains("test: only the test classpath is affected"));
     }
 
     #[test]
@@ -512,6 +757,7 @@ mod tests {
         println!("{s}");
         assert!(s.contains("Why org.slf4j:slf4j-api?"));
         assert!(s.contains("web → logback-classic:1.4.14 → slf4j-api:2.0.13"));
+        assert!(s.contains("▲ logback-classic:1.4.14 asked 2.0.7 → gets 2.0.13  patch"));
         assert!(s.contains("core → slf4j-api:2.0.13"));
     }
 }
