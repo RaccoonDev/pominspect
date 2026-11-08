@@ -28,11 +28,17 @@ A terminal UI for exploring a Maven build's effective POM and dependency tree.
 ## Requirements
 
 - A JDK and Maven. pominspect uses the project's `./mvnw` if there is one, otherwise `mvn` on your `PATH`.
-- Rust (to build it).
+- Rust, only if you build from source.
 
 ## Install
 
-Download an archive for your platform from [Releases](https://github.com/RaccoonDev/pominspect/releases), unpack it, and put `pominspect` on your `PATH`. Builds are published for Linux (x86_64, arm64; static), macOS (Intel, Apple silicon) and Windows (x86_64), each with a `.sha256` checksum.
+With Homebrew (macOS and Linux):
+
+```sh
+brew install raccoondev/tap/pominspect
+```
+
+Or download an archive for your platform from [Releases](https://github.com/RaccoonDev/pominspect/releases), unpack it, and put `pominspect` on your `PATH`. Builds are published for Linux (x86_64, arm64; static), macOS (Intel, Apple silicon) and Windows (x86_64), each with a `.sha256` checksum.
 
 Or build from source:
 
@@ -128,6 +134,6 @@ To release, set `version` in `Cargo.toml`, commit, then push a matching tag:
 git tag v0.0.1 && git push origin v0.0.1
 ```
 
-[.github/workflows/release.yml](.github/workflows/release.yml) then runs CI, builds the archives for every platform, and publishes them as a GitHub release with generated notes. It fails if the tag doesn't match the version in `Cargo.toml`.
+[.github/workflows/release.yml](.github/workflows/release.yml) then runs CI, builds the archives for every platform, publishes them as a GitHub release with generated notes, and updates the formula in [RaccoonDev/homebrew-tap](https://github.com/RaccoonDev/homebrew-tap) (using the `HOMEBREW_TAP_TOKEN` secret). It fails if the tag doesn't match the version in `Cargo.toml`.
 
 [GLOSSARY.md](GLOSSARY.md) defines the project's terms (Effective POM, Origin, Inspection Error, …), and [docs/adr/](docs/adr/) records the main design decisions.

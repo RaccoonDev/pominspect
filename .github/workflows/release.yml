@@ -19,15 +19,19 @@ jobs:
   version:
     name: Check tag matches Cargo.toml
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
     steps:
       - uses: actions/checkout@v5
-      - shell: bash
+      - id: check
+        shell: bash
         run: |
           crate="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
           if [ "v$crate" != "$GITHUB_REF_NAME" ]; then
             echo "::error::tag $GITHUB_REF_NAME does not match Cargo.toml version $crate"
             exit 1
           fi
+          echo "version=$crate" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build ${{ matrix.target }}
@@ -104,3 +108,12 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
             --generate-notes
+
+  homebrew:
+    name: Publish Homebrew formula
+    needs: [version, release]
+    uses: ./.github/workflows/homebrew.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+    secrets:
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

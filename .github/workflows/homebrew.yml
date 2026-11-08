@@ -1,0 +1,53 @@
+name: Homebrew
+
+# Publishes the formula for a release to RaccoonDev/homebrew-tap.
+# Runs at the end of the Release workflow; can also be run by hand from the
+# Actions tab to republish the formula for an existing release.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Release version, without the leading v
+        type: string
+        required: true
+    secrets:
+      HOMEBREW_TAP_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version, without the leading v (e.g. 0.0.1)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  formula:
+    name: Update formula in homebrew-tap
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          repository: RaccoonDev/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+      - name: Generate formula
+        run: |
+          mkdir -p tap/Formula
+          bash .github/homebrew/formula.sh "${{ inputs.version }}" > tap/Formula/pominspect.rb
+          cat tap/Formula/pominspect.rb
+      - name: Commit and push
+        working-directory: tap
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/pominspect.rb
+          if git diff --cached --quiet; then
+            echo "Formula already up to date"
+            exit 0
+          fi
+          git commit -m "pominspect ${{ inputs.version }}"
+          git push
